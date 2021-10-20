@@ -1,59 +1,20 @@
-FROM php:8.0.11-fpm-alpine3.13
+FROM acrossoffwest/docker-php-fpm:master
 
 MAINTAINER Yurij Karpov <acrossoffwest@gmail.com>
 
 RUN apk update
 
-ADD  https://github.com/mlocati/docker-php-extension-installer/releases/latest/download/install-php-extensions /usr/local/bin/
-RUN chmod +x /usr/local/bin/install-php-extensions
+RUN apk --no-cache add php8-cgi
 
-### Web server
+RUN install-php-extensions pcntl
 
-# Server
-RUN apk add nginx
-RUN mkdir -p /run/nginx
+ARG version=^2.2.2
+ARG http_version=^2.0.6
+RUN mkdir /ppm && cd /ppm && composer require php-pm/php-pm:${version} && composer require --with-all-dependencies php-pm/httpkernel-adapter:${http_version}
 
-# Database
-RUN apk add postgresql-client postgresql-dev
 
-# Other
-RUN apk add git dcron nano bash libzip-dev unzip g++
-
-### PHP
-
-# Database
-RUN install-php-extensions pdo pdo_pgsql pgsql pdo_mysql mysqli
-
-# Image
-RUN install-php-extensions imagick gd exif
-
-# Other
-RUN install-php-extensions zip opcache xmlreader redis
-
-# Composer
-
-RUN php -r "copy('https://getcomposer.org/installer', 'composer-setup.php');" && \
-    php composer-setup.php --install-dir=/usr/local/bin --filename=composer && \
-    rm composer-setup.php
-
-# Configs
-
-COPY ./conf.d/custom.ini /usr/local/etc/php/conf.d/custom_docker_php_fpm.ini
-
-### Cron: Copy schedule
-COPY ./cron.d /etc/cron.d
-
-### Supervisor
-# supervisor installation &&
-# create directory for child images to store configuration in
-RUN apk add supervisor && \
-  mkdir -p /var/log/supervisor && \
-  mkdir -p /etc/supervisor
 
 COPY ./supervisor /etc/supervisor
-
-RUN rm -rf /var/cache/apk/*
-
-EXPOSE 80
-
-CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/supervisord.conf"]
+COPY config.json /ppm/config.json
+COPY ppm /usr/local/sbin/php-ppm
+RUN chmod +x /usr/local/sbin/php-ppm
